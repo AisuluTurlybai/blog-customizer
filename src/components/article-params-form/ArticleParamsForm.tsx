@@ -1,104 +1,122 @@
+import { useEffect, useState ,useRef} from 'react';
+import clsx from 'clsx';
+
 import { ArrowButton } from 'src/ui/arrow-button';
 import { Button } from 'src/ui/button';
-import { useEffect, useState } from 'react';
-import styles from './ArticleParamsForm.module.scss';
-import clsx from 'clsx';
-import { Text } from 'src/ui/text';
 import { RadioGroup } from 'src/ui/radio-group';
+import { Select } from 'src/ui/select';
+import { Separator } from 'src/ui/separator';
+
 import {
   fontFamilyOptions,
   fontSizeOptions,
   fontColors,
   backgroundColors,
   contentWidthArr,
-  defaultArticleState,
   type ArticleStateType,
 } from 'src/constants/articleProps';
-import { Select } from 'src/ui/select';
-import { Separator } from 'src/ui/separator';
 
-function applyCssVars(state: ArticleStateType) {
-  const host = document.querySelector('main') as HTMLElement | null;
-  if (!host) return;
-  host.style.setProperty('--font-family', state.fontFamilyOption.value);
-  host.style.setProperty('--font-size', state.fontSizeOption.value);
-  host.style.setProperty('--font-color', state.fontColor.value);
-  host.style.setProperty('--container-width', state.contentWidth.value);
-  host.style.setProperty('--bg-color', state.backgroundColor.value);
-}
+import styles from './ArticleParamsForm.module.scss';
 
-export const ArticleParamsForm = () => {
-  const [isOpen, setIsOpen] = useState(false);
+type ArticleParamsFormProps = {
+   applied: ArticleStateType;
+   onApply: (next: ArticleStateType) => void;
+   onReset: () => void; 
+   fixedOpen?: boolean;
+  initialOpen?: boolean;
+};
 
-  const [applied, setApplied] = useState<ArticleStateType>(defaultArticleState);
+export const ArticleParamsForm = ({
+  applied,
+  onApply,
+  onReset,
+  fixedOpen = false,
+  initialOpen = false,
+}: ArticleParamsFormProps) => {
+  const [isOpen, setIsOpen] = useState(initialOpen);
+  const open = fixedOpen ? true : isOpen;
 
-  const [font, setFont] = useState(applied.fontFamilyOption);
-  const [size, setSize] = useState(applied.fontSizeOption);
-  const [fontColor, setFontColor] = useState(applied.fontColor);
-  const [backgroundColor, setBackgroundColor] = useState(applied.backgroundColor);
-  const [contentWidth, setContentWidth] = useState(applied.contentWidth);
+  const asideRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    applyCssVars(defaultArticleState);
-  }, []);
+    if (!open || fixedOpen) return;
+
+    const onPointer = (e: MouseEvent | TouchEvent) => {
+      const el = asideRef.current;
+      if (!el) return;
+      const target = e.target as Node;
+      if (!el.contains(target)) {
+        setIsOpen(false); 
+      }
+    };
+
+    document.addEventListener('mousedown', onPointer);
+    document.addEventListener('touchstart', onPointer);
+    return () => {
+      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('touchstart', onPointer);
+    };
+  }, [open, fixedOpen]);
+
+  useEffect(() => {
+    if (!open || fixedOpen) return;
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsOpen(false);
+    };
+
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, fixedOpen]);
+
+  const [draft, setDraft] = useState<ArticleStateType>(applied);
+
+  useEffect(() => {
+    setDraft(applied);
+  }, [applied]);
+
+  function update<K extends keyof ArticleStateType>(field: K, value: ArticleStateType[K]) {
+    setDraft(prev => ({ ...prev, [field]: value }));
+  }
 
   const handleSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
     e.preventDefault();
-
-    const next: ArticleStateType = {
-      fontFamilyOption: font,
-      fontSizeOption: size,
-      fontColor,
-      backgroundColor,
-      contentWidth,
-    };
-
-    applyCssVars(next);
-
-    setApplied(next);
-		setIsOpen(!isOpen);
-  };
+    onApply(draft);
+  }
 
   const handleReset: React.FormEventHandler<HTMLFormElement> = (e) => {
     e.preventDefault();
-    applyCssVars(defaultArticleState);
-    setApplied(defaultArticleState);
-    setFont(defaultArticleState.fontFamilyOption);
-    setSize(defaultArticleState.fontSizeOption);
-    setFontColor(defaultArticleState.fontColor);
-    setBackgroundColor(defaultArticleState.backgroundColor);
-    setContentWidth(defaultArticleState.contentWidth);
-		setIsOpen(!isOpen);
-  };
+    onReset();
+  }
+
+  const openPanelOnMouseDown = () => { if (!fixedOpen) setIsOpen(true); };
+  const closePanelFromSelect = () => { if (!fixedOpen) setIsOpen(false); };
+
 
   return (
     <>
-      <ArrowButton isOpen={isOpen} onClick={() => setIsOpen(!isOpen)} />
-      <aside className={clsx(styles.container, { [styles.container_open]: isOpen })}>
-        <form className={styles.form} onSubmit={handleSubmit} onReset={handleReset}>
-          <Text as="h2" size={31} weight={800} uppercase dynamicLite>
-            Задайте параметры
-          </Text>
+      {!fixedOpen && (
+        <ArrowButton
+          isOpen={open}
+          onClick={() => { if (!fixedOpen) setIsOpen(v => !v); }}
+        />
+      )}
 
-          <div onMouseDownCapture={() => setIsOpen(true)}>
+      <aside
+        ref={asideRef} 
+        className={clsx(styles.container, { [styles.container_open]: open })}
+      >
+        <form className={styles.form} onSubmit={handleSubmit} onReset={handleReset}>
+          <h2 className={styles.title}>Задайте параметры</h2>
+
+          <div onMouseDownCapture={openPanelOnMouseDown}>
             <Select
               title="Шрифт"
               options={fontFamilyOptions}
-              selected={font}
-              onChange={setFont}
-              onClose={() => setIsOpen(false)}
+              selected={draft.fontFamilyOption}
+              onChange={(v) => update('fontFamilyOption', v)}
+              onClose={closePanelFromSelect}
               placeholder="Выберите шрифт"
-            />
-          </div>
-
-          <div onMouseDownCapture={() => setIsOpen(true)}>
-            <Select
-              title="Цвет шрифта"
-              options={fontColors}
-              selected={fontColor}
-              onChange={setFontColor}
-              onClose={() => setIsOpen(false)}
-              placeholder="Выберите цвет шрифта"
             />
           </div>
 
@@ -106,30 +124,41 @@ export const ArticleParamsForm = () => {
             name="article-size"
             title="Размер шрифта"
             options={fontSizeOptions}
-            selected={size}
-            onChange={setSize}
+            selected={draft.fontSizeOption}
+            onChange={(v) => update('fontSizeOption', v)}
           />
+
+          <div onMouseDownCapture={openPanelOnMouseDown}>
+            <Select
+              title="Цвет шрифта"
+              options={fontColors}
+              selected={draft.fontColor}
+              onChange={(v) => update('fontColor', v)}
+              onClose={closePanelFromSelect}
+              placeholder="Выберите цвет шрифта"
+            />
+          </div>
 
           <Separator />
 
-          <div onMouseDownCapture={() => setIsOpen(true)}>
+          <div onMouseDownCapture={openPanelOnMouseDown}>
             <Select
               title="Цвет фона"
               options={backgroundColors}
-              selected={backgroundColor}
-              onChange={setBackgroundColor}
-              onClose={() => setIsOpen(false)}
+              selected={draft.backgroundColor}
+              onChange={(v) => update('backgroundColor', v)}
+              onClose={closePanelFromSelect}
               placeholder="Выберите цвет фона"
             />
           </div>
 
-          <div onMouseDownCapture={() => setIsOpen(true)}>
+          <div onMouseDownCapture={openPanelOnMouseDown}>
             <Select
               title="Ширина контента"
               options={contentWidthArr}
-              selected={contentWidth}
-              onChange={setContentWidth}
-              onClose={() => setIsOpen(false)}
+              selected={draft.contentWidth}
+              onChange={(v) => update('contentWidth', v)}
+              onClose={closePanelFromSelect}
               placeholder="Выберите ширину контента"
             />
           </div>
